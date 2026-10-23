@@ -37,13 +37,20 @@ def _norm(s: str) -> str:
     return s.replace(",", "").replace(" ", "").lower()
 
 
+def final_text(answer: str) -> str:
+    """Drop reasoning that leaks into content before `</think>` (seen with qwen3 + think: false),
+    so a number in the reasoning cannot count as a correct final answer."""
+    return answer.rsplit("</think>", 1)[-1]
+
+
 def grade(it: dict, res) -> tuple[bool, list[str], bool]:
     """(success, missing expected tools, answer matched). Grading lives here, never in the loop."""
     expect = days_left_in_month() if it.get("dynamic") == "days_left_in_month" else it["expect_any"]
     executed = {ev["call"]["function"].get("name") for t in res.trace for ev in t["events"]
                 if not ev["repeat"]}
     missing = [t for t in it["expected_tools"] if t not in executed]
-    matched = bool(res.answer) and any(_norm(x) in _norm(res.answer) for x in expect)
+    answer = final_text(res.answer or "")
+    matched = bool(answer.strip()) and any(_norm(x) in _norm(answer) for x in expect)
     return res.status == "done" and not missing and matched, missing, matched
 
 

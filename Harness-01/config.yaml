@@ -1,7 +1,7 @@
 # M2 - Model config
 # Code asks for a profile, never a model tag. Change models here.
 # Pick profiles from your Session 1 benchmark results.
-# This environment uses one local model (deepseek-r1:1.5b) for every profile.
+# Profiles per DEV_AGENT_LOOP.md: fast = deepseek-r1:1.5b, reasoning/fallback = qwen3:4b.
 
 runtime:
   base_url: http://localhost:11434
@@ -18,20 +18,20 @@ profiles:
     think: false         # reasoning off: faster, cleaner JSON
 
   reasoning:
-    model: deepseek-r1:1.5b
+    model: qwen3:4b
     temperature: 0
     num_ctx: 16384
-    num_predict: 1024
+    num_predict: 2048
     keep_alive: 10m
     think: false
 
   fallback:
-    model: deepseek-r1:1.5b
+    model: qwen3:4b
     temperature: 0
     num_ctx: 8192
-    num_predict: 512
+    num_predict: 4096
     keep_alive: 10m
-    think: false
+    think: true          # escalation: reasoning on (thinking tokens count toward num_predict)
 
 logging:
   file: logs/calls.jsonl
