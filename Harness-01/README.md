@@ -42,6 +42,9 @@ To use other models, edit `config.yaml`. No code changes are needed.
 | `data/tool_prompts.jsonl` | 10 tool-calling prompts with the expected tool (homework) | Homework |
 | `scripts/` | Demos, hands-on and homework runners (below) | — |
 | `tests/test_offline.py` | 15 offline tests using a fake client | — |
+| `harness/agent.py` | **M8** Agent loop: `run_agent()`, `completion_check()` | Session 3 |
+| `data/agent_tasks.jsonl`, `scripts/agent_eval.py`, `scripts/prefix_check.py` | 10 multi-step tasks, loop eval, prefix-cache check | Session 3 |
+| `tests/test_agent_offline.py` | 12 offline agent-loop tests | Session 3 |
 
 ## Live demos (teacher)
 
@@ -93,6 +96,29 @@ Try at least two fixes (better tool descriptions, simpler argument schemas, prom
 fewer tools, a larger model) and write a short note on which helped most.
 Results are saved to `logs/tool_call_results.csv`.
 
+## Hands-on (Session 3): agent loop
+
+`harness/agent.py` wraps the Session 2 round trip in `run_agent()` (M8): max steps, repeat
+detection (an identical call is not executed again), and a mechanical completion check that
+restates the goal when it rejects an answer. Messages are append-only so the prefix stays
+cacheable. Full brief: `DEV_AGENT_LOOP.md`.
+
+```powershell
+python scripts/agent_eval.py --only m01 --verbose    # checkpoint 1: loop log for one task
+python scripts/agent_eval.py                         # checkpoint 2: success rate on 10 tasks (fast + reasoning)
+python scripts/agent_eval.py --profiles reasoning --max-steps 6
+python scripts/prefix_check.py                       # stable vs shuffled prefix, TTFT per step (task m07)
+python scripts/prefix_check.py --task m02 --repeats 3
+```
+
+Tasks are in `data/agent_tasks.jsonl`. A task succeeds when the loop ends `done`, every expected
+tool was executed and the answer contains an expected value. Results: `logs/agent_results.csv`
+(per task), `logs/agent_steps.csv` (per step, incl. `done_reason`), `logs/prefix_check.csv`.
+Low success with a 1.5B model is a valid result: check repeats, early stops and truncated steps
+(`done_reason = length`) in `logs/agent_steps.csv` before changing the loop.
+
+**Checkpoint:** loop log for one task + success rate on 10 tasks.
+
 ## Reading the log
 
 ```python
@@ -103,6 +129,7 @@ df[df.event == "llm_call"].groupby("model")["valid"].mean()
 ```
 
 Events: `llm_call`, `tool_call`, `safe_failure`. Group rows from one task with `run_id`.
+Agent-loop `llm_call` lines also carry `step`, `variant` and `done_reason`.
 
 ## Notes
 
