@@ -34,4 +34,4 @@ profiles:
     think: true          # escalation: reasoning on (thinking tokens count toward num_predict)
 
 logging:
-  file: logs/calls.jsonl
+  file: logs/session3_calls.jsonl   # Session 2 runs: logs/session2_calls.jsonl

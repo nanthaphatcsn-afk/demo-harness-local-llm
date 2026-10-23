@@ -30,7 +30,7 @@ def main():
     ap.add_argument("--profile", default="reasoning")
     ap.add_argument("--repeats", type=int, default=1)
     ap.add_argument("--max-steps", type=int, default=8)
-    ap.add_argument("--out", default=str(ROOT / "logs" / "prefix_check.csv"))
+    ap.add_argument("--out", default=str(ROOT / "logs" / "session3_prefix_check.csv"))
     a = ap.parse_args()
 
     h = Harness()

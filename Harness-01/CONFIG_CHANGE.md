@@ -50,11 +50,15 @@
 
 - `hands_on2_eval.py` และ `tool_call_eval.py` ใช้ `fast,reasoning` เป็นค่าเริ่มต้น
   ถ้ารันตอนนี้ ฝั่ง `reasoning` จะเป็น `qwen3:4b` แทน `deepseek-r1:1.5b`
-- **log เก่าเทียบกับ log ใหม่ไม่ได้ตรงๆ** ไฟล์ `logs/hands_on2_results.csv`, `logs/tool_call_results.csv`
-  และแถวเก่าใน `logs/calls.jsonl` ทำไว้ตอนที่ทุก profile เป็น 1.5B
-  ไฟล์ CSV จะถูกเขียนทับเมื่อรันใหม่ ส่วน `calls.jsonl` จะเขียนต่อท้ายไปเรื่อยๆ
-  ไฟล์ทั้งหมดนี้ไม่อยู่ใน git จึงเรียกคืนไม่ได้ ถ้าจะเก็บไว้ ให้คัดลอกออกไปก่อนรันใหม่
-  (รอบนี้ยังไม่ได้ย้ายหรือคัดลอก)
+- **log เก่าเทียบกับ log ใหม่ไม่ได้ตรงๆ** จึงแยกชื่อไฟล์ตาม session ไว้ให้แล้ว:
+  - ผลของ Session 2 (ทำตอนที่ทุก profile เป็น 1.5B) เปลี่ยนชื่อเป็น `logs/session2_calls.jsonl`
+    (เฉพาะแถววันที่ 2 และ 10 ต.ค.), `logs/session2_hands_on2_results.csv` และ `logs/session2_tool_call_results.csv`
+  - งานใหม่ใช้ชื่อ `session3_*`: `config.yaml` → `logging.file: logs/session3_calls.jsonl`
+    (แถวทดสอบ agent loop วันที่ 23 ต.ค. ย้ายมาอยู่ไฟล์นี้), `session3_agent_results.csv`,
+    `session3_agent_steps.csv` และ `session3_prefix_check.csv`
+  - ถ้ารัน script ของ Session 2 ซ้ำ ผลจะออกเป็น `hands_on2_results.csv` / `tool_call_results.csv` (ไม่มี prefix)
+    จึงไม่ทับไฟล์ `session2_*`
+  - ไฟล์ log ทั้งหมดไม่อยู่ใน git (`.gitignore`)
 - ใน `calls.jsonl` ให้แยกผลด้วยคอลัมน์ `model` ไม่ใช่ `profile` เพราะชื่อ profile เดิมตอนนี้ชี้ไปที่ model อื่นแล้ว
 
 ### Profile `fallback` (`think: true`, `num_predict: 4096`)
@@ -84,9 +88,8 @@
   ตอนนี้ตัดออกเฉพาะตอนให้คะแนน ถ้าจะตัดออกจากคำตอบที่บันทึกด้วยต้องแก้ใน connector หรือ loop ซึ่งอยู่นอกขอบเขตของ brief
 - **`check_setup.py`:** test call ของ `fast` ได้คำตอบว่าง (`''`) เพราะ `num_predict=16` น้อยเกินสำหรับ `deepseek-r1:1.5b`
   ปัญหานี้มีอยู่ก่อนแล้วและ profile `fast` ไม่ได้ถูกแก้
-- **README ยังไม่ตรงกับ config:** ส่วน Setup ยังบอกให้ pull `qwen3:4b-q4_K_M`, `qwen3:8b-q4_K_M` และ `gemma3:12b-it-q4_K_M`
-  ส่วน Hands-on 2 ยังเขียนว่า "fast (4B) vs reasoning (8B)"
-  ที่ถูกคือ `ollama pull deepseek-r1:1.5b` และ `ollama pull qwen3:4b` และเปรียบเทียบเป็น 1.5B กับ 4B
+
+README แก้ให้ตรงกับ config แล้ว (model ที่ต้อง pull, ตาราง profile, 1.5B กับ 4B, ชื่อไฟล์ log)
 
 ## วิธีย้อนกลับ
 

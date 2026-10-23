@@ -82,8 +82,8 @@ def main():
     ap.add_argument("--prompt", default="tool_assistant")
     ap.add_argument("--only", default="", help="comma-separated task ids, e.g. m01,m07")
     ap.add_argument("--verbose", action="store_true", help="print every step of the loop")
-    ap.add_argument("--out", default=str(ROOT / "logs" / "agent_results.csv"))
-    ap.add_argument("--steps-out", default=str(ROOT / "logs" / "agent_steps.csv"))
+    ap.add_argument("--out", default=str(ROOT / "logs" / "session3_agent_results.csv"))
+    ap.add_argument("--steps-out", default=str(ROOT / "logs" / "session3_agent_steps.csv"))
     a = ap.parse_args()
 
     h = Harness()
