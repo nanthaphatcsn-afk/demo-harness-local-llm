@@ -38,8 +38,9 @@ def _norm(s: str) -> str:
 
 
 def final_text(answer: str) -> str:
-    """Drop reasoning that leaks into content before `</think>` (seen with qwen3 + think: false),
-    so a number in the reasoning cannot count as a correct final answer."""
+    """Second guard only: M1 (`split_thinking` in llm_client.py) already moves reasoning that
+    leaks into content before `</think>` to ChatResult.thinking. Kept so a number in leaked
+    reasoning can never count as a correct final answer."""
     return answer.rsplit("</think>", 1)[-1]
 
 

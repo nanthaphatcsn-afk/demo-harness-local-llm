@@ -36,14 +36,31 @@ class ModelNotFoundError(LLMError):
 
 
 NS = 1e9  # Ollama durations are in nanoseconds
+THINK_END = "</think>"
+
+
+def split_thinking(content: str) -> tuple[str, str]:
+    """Return (thinking, answer). Handles '<think>…</think>answer', '…</think>answer'
+    (no opening tag) and plain 'answer'. Splits on the LAST '</think>'.
+
+    Some models (e.g. qwen3 with think: false) still write their reasoning into the content.
+    """
+    head, sep, answer = content.rpartition(THINK_END)
+    if not sep:
+        return "", content
+    thinking = head.strip()
+    if thinking.startswith("<think>"):
+        thinking = thinking[len("<think>"):].strip()
+    return thinking, answer.lstrip()
 
 
 @dataclass
 class ChatResult:
     model: str
-    content: str
+    content: str                      # the answer only; leaked reasoning is moved to `thinking`
     message: dict                     # assistant message, ready to append to history
     tool_calls: list[dict] = field(default_factory=list)
+    thinking: str = ""                # never part of `message`, so never fed back to the model
     prompt_tokens: int = 0
     output_tokens: int = 0
     load_s: float = 0.0
@@ -107,11 +124,15 @@ class LLMClient:
 
         msg = data.get("message", {}) or {}
         calls = msg.get("tool_calls") or []
+        leaked, content = split_thinking(msg.get("content", "") or "")
+        thinking = "\n".join(x for x in (msg.get("thinking") or "", leaked) if x)
+        message = {k: v for k, v in msg.items() if k in ("role", "tool_calls")}
         return ChatResult(
             model=model,
-            content=msg.get("content", "") or "",
-            message={k: v for k, v in msg.items() if k in ("role", "content", "tool_calls")},
+            content=content,
+            message={"role": "assistant", **message, "content": content},
             tool_calls=calls,
+            thinking=thinking,
             prompt_tokens=data.get("prompt_eval_count", 0),
             output_tokens=data.get("eval_count", 0),
             load_s=data.get("load_duration", 0) / NS,
@@ -152,12 +173,14 @@ class LLMClient:
             calls.append({"id": c.get("id"), "function": {"name": c["function"]["name"],
                                                           "arguments": args}})
         usage = data.get("usage", {})
+        thinking, content = split_thinking(msg.get("content") or "")
         return ChatResult(
             model=model,
-            content=msg.get("content") or "",
-            message={"role": "assistant", "content": msg.get("content") or "",
+            content=content,
+            message={"role": "assistant", "content": content,
                      **({"tool_calls": calls} if calls else {})},
             tool_calls=calls,
+            thinking=thinking,
             prompt_tokens=usage.get("prompt_tokens", 0),
             output_tokens=usage.get("completion_tokens", 0),
             wall_s=wall,

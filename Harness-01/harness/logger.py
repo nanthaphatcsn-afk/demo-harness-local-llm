@@ -38,7 +38,7 @@ class JsonlLogger:
             prompt=prompt_id, in_tokens=result.prompt_tokens, out_tokens=result.output_tokens,
             ttft_s=round(result.ttft_s, 3), gen_s=round(result.gen_s, 3),
             wall_s=round(result.wall_s, 3), tool_calls=len(result.tool_calls),
-            valid=valid, error=error, retry=retry, **extra)
+            thinking_chars=len(result.thinking), valid=valid, error=error, retry=retry, **extra)
 
     def tool_call(self, *, run_id, name, arguments, ok, duration_s, error=None, **extra):
         return self.write("tool_call", run_id=run_id, tool=name, arguments=arguments,
