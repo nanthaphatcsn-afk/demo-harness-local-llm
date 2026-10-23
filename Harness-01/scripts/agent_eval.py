@@ -13,50 +13,19 @@ The summary reports answer accuracy (3 only) next to full success (1 + 2 + 3), s
     python scripts/agent_eval.py --only m01 --verbose    # full loop log for one task (checkpoint)
 """
 import argparse
-import calendar
 import csv
 import json
-from datetime import datetime
 from pathlib import Path
 from statistics import mean
-from zoneinfo import ZoneInfo
 
 import _path  # noqa: F401
 from _path import ROOT
+from _grading import grade, load_tasks
 
 import harness.sample_tools  # noqa: F401
 from harness import Harness, run_agent
 
 READ_TOOLS = ["calculator", "lookup_customer", "current_datetime"]
-
-
-def days_left_in_month() -> list[str]:
-    now = datetime.now(ZoneInfo("Asia/Bangkok"))
-    left = calendar.monthrange(now.year, now.month)[1] - now.day
-    return [str(left)]
-
-
-def _norm(s: str) -> str:
-    return s.replace(",", "").replace(" ", "").lower()
-
-
-def final_text(answer: str) -> str:
-    """Second guard only: M1 (`split_thinking` in llm_client.py) already moves reasoning that
-    leaks into content before `</think>` to ChatResult.thinking. Kept so a number in leaked
-    reasoning can never count as a correct final answer."""
-    return answer.rsplit("</think>", 1)[-1]
-
-
-def grade(it: dict, res) -> tuple[bool, list[str], bool]:
-    """(success, missing expected tools, answer matched). Grading lives here, never in the loop."""
-    expect = days_left_in_month() if it.get("dynamic") == "days_left_in_month" else it["expect_any"]
-    executed = {ev["call"]["function"].get("name") for t in res.trace for ev in t["events"]
-                if not ev["repeat"]}
-    missing = [t for t in it["expected_tools"] if t not in executed]
-    answer = _norm(final_text(res.answer or ""))
-    matched = (bool(answer) and any(_norm(x) in answer for x in expect)
-               and all(_norm(x) in answer for x in it.get("expect_all", [])))
-    return res.status == "done" and not missing and matched, missing, matched
 
 
 def print_trace(res) -> None:
@@ -92,11 +61,7 @@ def main():
     a = ap.parse_args()
 
     h = Harness()
-    with open(ROOT / "data" / "agent_tasks.jsonl", encoding="utf-8") as f:
-        items = [json.loads(l) for l in f if l.strip()]
-    if a.only:
-        keep = set(a.only.split(","))
-        items = [it for it in items if it["id"] in keep]
+    items = load_tasks(a.only)
 
     rows, steps = [], []
     for profile in a.profiles.split(","):

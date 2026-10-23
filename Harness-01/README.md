@@ -58,6 +58,10 @@ Model tags must match `ollama list` exactly. Before Session 3 every profile used
 | `tests/test_llm_client_offline.py` | 10 offline connector tests (reasoning split, loop through M1) | Session 3 |
 | `DEV_AGENT_LOOP.md` | Developer brief for the Session 3 hands-on | Session 3 |
 | `DEV_FIXES_01.md` | Follow-up brief: fixes after review | Session 3 |
+| `harness/state_machine.py` | **M9** State machine: states, transition table, `run_state_machine()` | Session 3 (2) |
+| `harness/classifier.py`, `harness/planner.py`, `harness/verifier.py`, `harness/router.py` | CLASSIFY (rules), PLAN (schema), VERIFY (code checks V1–V5), router | Session 3 (2) |
+| `scripts/sm_eval.py`, `scripts/compare_configs.py`, `scripts/_grading.py` | State-machine eval, loop vs state-machine comparison, shared grading | Session 3 (2) |
+| `DEV_STATE_MACHINE.md` | Developer brief for the state machine + router hands-on | Session 3 (2) |
 | `CONFIG_CHANGE.md` | Model-profile change for Session 3: what changed and its impact | Session 3 |
 
 ## Live demos (teacher)
@@ -172,6 +176,47 @@ stops and truncated steps in `logs/session3_agent_steps.csv` before changing the
 
 **Checkpoint:** loop log for one task + success rate on 10 tasks.
 
+## Hands-on (Session 3): state machine + router
+
+Slide 18: wrap the agent in INTAKE → CLASSIFY → PLAN → ACT → VERIFY → DONE, route each state to
+the right executor, and compare with the single-model loop on the same 10 tasks.
+*Loop inside a state, state machine across the workflow*: `run_agent()` is the worker inside ACT.
+Full brief and design decisions (D1–D6, hypotheses H1–H5): `DEV_STATE_MACHINE.md`.
+
+| State | Executor | What it does |
+|---|---|---|
+| INTAKE | code | rejects an empty task; extracts customer IDs (`C-\d+`) |
+| CLASSIFY | rules (`fast` only if no rule matches) | picks a category and its tool allow-list, e.g. `customer_calc` → `lookup_customer`, `calculator` |
+| PLAN *(optional)* | `reasoning` | a short tool plan (Pydantic schema, one repair retry); sent to ACT as one extra user message, so the cached prefix is unchanged |
+| ACT | `--act-profile` (default `reasoning`) | `run_agent()` with the allow-list, max 6 steps per attempt; a tool outside the list sends the task back to CLASSIFY once (→ `general`) |
+| VERIFY | code | V1 well-formed · V2 every customer ID looked up · V3 a number in the answer comes from a tool result (numbers from the task text removed) · V4 calculator used · V5 not-found / permission errors acknowledged. On failure the reasons go back to ACT in the same history, at most 3 ACT attempts in total |
+
+Every move must be in the transition table (`TRANSITIONS`); anything else raises
+`IllegalTransition`. Moves, routes and VERIFY reports are logged as `transition`, `route` and
+`verify` events. VERIFY is deliberately code, not a model judge (D5), and never sees the expected
+answers or the plan.
+
+```bash
+python scripts/sm_eval.py --plan on --only m02 --verbose   # checkpoint 1: transition log for one task
+python scripts/sm_eval.py --plan off                       # config C
+python scripts/sm_eval.py --plan on                        # config D
+python scripts/sm_eval.py --plan on --act-profile fast     # config E (optional)
+python scripts/compare_configs.py                          # checkpoint 2: comparison table + per-task matrix
+```
+
+| Config | Mode | PLAN | ACT profile |
+|---|---|---|---|
+| A | loop (`agent_eval.py`) | — | `fast` |
+| B | loop (`agent_eval.py`) | — | `reasoning` |
+| C | state machine | off | `reasoning` |
+| D | state machine | on | `reasoning` |
+| E *(optional)* | state machine | on | `fast` |
+
+C vs B isolates the state machine; D vs C isolates PLAN. Grading is shared with the loop
+(`scripts/_grading.py`), so the numbers are comparable.
+
+**Checkpoint:** state-transition log for one task + the comparison table.
+
 ## Logs
 
 All logs are in `logs/` and are not committed to git. Files are prefixed by session so that
@@ -186,6 +231,8 @@ Session 3 runs (new model profiles) never overwrite Session 2 results:
 | `session3_agent_results.csv` | `agent_eval.py`: one row per task and profile |
 | `session3_agent_steps.csv` | `agent_eval.py`: one row per loop step (`done_reason`, tokens, TTFT, check verdict) |
 | `session3_prefix_check.csv` | `prefix_check.py`: per-step stable vs shuffled timings |
+| `session3_sm_{plan,noplan}_{profile}_results.csv` | `sm_eval.py`: one row per task (attempts, VERIFY, LLM calls, tokens, switches, transitions) |
+| `session3_comparison.md` | `compare_configs.py`: table for configs A–E and the per-task matrix |
 
 Re-running the Session 2 scripts writes `hands_on2_results.csv` / `tool_call_results.csv`
 (without a prefix) and logs calls to `session3_calls.jsonl`.
