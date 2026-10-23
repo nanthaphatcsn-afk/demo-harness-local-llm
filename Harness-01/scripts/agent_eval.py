@@ -1,9 +1,12 @@
 """Hands-on (Session 3): run the agent loop on 10 multi-step tasks and measure it.
 
-A task counts as a success when
+A task counts as a full success when
   1. the loop ends with status "done",
-  2. every expected tool was executed, and
-  3. the final answer contains one of expect_any (commas/spaces removed, case-insensitive).
+  2. every expected tool was executed (tool adherence), and
+  3. the final answer contains one of expect_any
+     (commas/spaces removed, case-insensitive) (answer match).
+The summary reports answer accuracy (3 only) next to full success (1 + 2 + 3), so
+"wrong answer" and "right answer, skipped a tool" can be told apart.
 
     python scripts/agent_eval.py                         # fast + reasoning, max_steps 8
     python scripts/agent_eval.py --profiles reasoning --max-steps 6
@@ -110,7 +113,7 @@ def main():
                          "steps": res.steps, "tool_calls": res.tool_calls,
                          "tool_ok": res.tool_ok, "repeats": res.repeats,
                          "truncated_steps": truncated, "missing_tools": ",".join(missing),
-                         "answer_match": matched, "mean_ttft_s": round(ttft, 3),
+                         "tool_adherence": not missing, "answer_match": matched, "mean_ttft_s": round(ttft, 3),
                          "wall_s": round(res.wall_s, 3), "answer": res.answer or ""})
             for t in res.trace:
                 steps.append({"profile": profile, "model": model, "id": it["id"],
@@ -140,12 +143,15 @@ def main():
         if not r:
             continue
         s = sum(x["success"] for x in r)
+        acc = sum(x["answer_match"] for x in r)
         attempted = sum(x["tool_calls"] for x in r)
         by_status: dict[str, int] = {}
         for x in r:
             by_status[x["status"]] = by_status.get(x["status"], 0) + 1
-        print(f"{profile:<10} {r[0]['model']:<20} success {s}/{len(r)} = {100 * s / len(r):.0f}%   "
-              f"mean steps {mean(x['steps'] for x in r):.1f}   "
+        print(f"{profile:<10} {r[0]['model']:<20} answer accuracy {acc}/{len(r)} = "
+              f"{100 * acc / len(r):.0f}%   full success {s}/{len(r)} = {100 * s / len(r):.0f}%   "
+              f"tool adherence {sum(x['tool_adherence'] for x in r)}/{len(r)}")
+        print(f"{'':<31} mean steps {mean(x['steps'] for x in r):.1f}   "
               f"tool ok {sum(x['tool_ok'] for x in r)}/{attempted}   "
               f"repeats {sum(x['repeats'] for x in r)}   "
               f"truncated {sum(x['truncated_steps'] for x in r)}")
