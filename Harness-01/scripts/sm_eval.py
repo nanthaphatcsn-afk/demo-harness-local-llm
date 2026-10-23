@@ -27,7 +27,7 @@ def print_run(res) -> None:
     print("    transitions:")
     for t in res.transitions:
         src_dst, _, reason = t.partition("(")
-        print(f"      {src_dst.replace('->', ' → '):<20} {reason.rstrip(')')}")
+        print(f"      {src_dst.replace('->', ' → '):<20} {reason[:-1]}")   # drop the closing ")"
     for i, r in enumerate(res.act_runs, 1):
         print(f"    ACT attempt {i}: status={r.status} steps={r.steps} "
               f"tools={r.tool_ok}/{r.tool_calls}")
