@@ -28,16 +28,17 @@ from .harness import Harness
 from .llm_client import LLMError
 from .logger import new_run_id
 from .prompts import build_messages
-from .tools import tool_defs
+from .tools import TOOLS, tool_defs
 
 PREFIX_MODES = ("stable", "shuffled")
+ON_DISALLOWED = ("error", "stop")
 _CUSTOMER_ID = re.compile(r"^c-\d+$", re.IGNORECASE)
 
 
 @dataclass
 class AgentResult:
     run_id: str
-    status: str            # "done" | "max_steps" | "aborted_repeats" | "error"
+    status: str            # "done" | "max_steps" | "aborted_repeats" | "error" | "needs_reclassify"
     answer: str | None
     steps: int
     tool_calls: int        # attempted
@@ -45,6 +46,7 @@ class AgentResult:
     repeats: int           # calls answered with a repeat error
     wall_s: float
     trace: list[dict] = field(default_factory=list)   # one entry per step
+    messages: list[dict] = field(default_factory=list)  # the full history, to continue it
 
 
 # ------------------------------------------------------------- helpers
@@ -123,26 +125,36 @@ def _tools_variant(tools: list[dict], mode: str) -> list[dict]:
 def run_agent(h: Harness, task: str, *, profile: str = "fast", max_steps: int = 8,
               tool_names: list[str] | None = None, prompt: str = "tool_assistant",
               max_repeats: int = 3, run_id: str | None = None,
-              prefix_mode: str = "stable") -> AgentResult:
+              prefix_mode: str = "stable", msgs: list[dict] | None = None,
+              allowed: set[str] | None = None, on_disallowed: str = "error") -> AgentResult:
     """Run `task` until the model gives an accepted final answer or a limit is hit.
 
     Never raises: runtime errors become status "error" plus a safe_failure log line.
+
+    For the state machine (defaults keep the plain loop unchanged):
+    msgs          - continue this history (appended to in place) instead of starting fresh
+    allowed       - tool names that may run; a registered tool outside it is not executed
+    on_disallowed - "error": answer with an error observation and continue;
+                    "stop": end with status "needs_reclassify"
     """
     if prefix_mode not in PREFIX_MODES:
         raise ValueError(f"prefix_mode must be one of {PREFIX_MODES}")
+    if on_disallowed not in ON_DISALLOWED:
+        raise ValueError(f"on_disallowed must be one of {ON_DISALLOWED}")
     run_id = run_id or new_run_id()
     system = h.prompts.get(prompt)
-    msgs = build_messages(system.render(), user=task)       # append-only from here on
+    if msgs is None:
+        msgs = build_messages(system.render(), user=task)   # append-only from here on
     tools = tool_defs(tool_names)
     seen: dict[str, dict] = {}
     res = AgentResult(run_id=run_id, status="max_steps", answer=None, steps=0,
-                      tool_calls=0, tool_ok=0, repeats=0, wall_s=0.0)
+                      tool_calls=0, tool_ok=0, repeats=0, wall_s=0.0, messages=msgs)
     consecutive = 0
     t0 = time.perf_counter()
 
     def finish(status: str, **log_fields) -> AgentResult:
         res.status, res.wall_s = status, time.perf_counter() - t0
-        if status != "done":
+        if status not in ("done", "needs_reclassify"):   # a reclassify is the caller's move
             h.log.write("safe_failure", run_id=run_id, prompt=system.id, steps=res.steps,
                         **log_fields)
         return res
@@ -169,7 +181,19 @@ def run_agent(h: Harness, task: str, *, profile: str = "fast", max_steps: int = 
         res.trace.append(entry)
 
         if r.tool_calls:
-            for call in r.tool_calls:
+            for i, call in enumerate(r.tool_calls):
+                name = call.get("function", {}).get("name", "")
+                if (on_disallowed == "stop" and allowed is not None and name in TOOLS
+                        and name not in allowed):
+                    # answer every remaining call so the history stays well-formed, then stop
+                    for rest in r.tool_calls[i:]:
+                        res.tool_calls += 1
+                        result = err("Tool not available in this step; the tools are being "
+                                     "re-selected.")
+                        entry["events"].append({"call": rest, "result": result,
+                                                "repeat": False, "disallowed": True})
+                        msgs.append(tool_message(rest, result))
+                    return finish("needs_reclassify")
                 res.tool_calls += 1
                 key = call_key(call)
                 if key in seen:
@@ -186,7 +210,7 @@ def run_agent(h: Harness, task: str, *, profile: str = "fast", max_steps: int = 
                                       repeats=res.repeats)
                     continue
                 consecutive = 0
-                result = execute(call, logger=h.log, run_id=run_id)
+                result = execute(call, logger=h.log, run_id=run_id, allowed_tools=allowed)
                 res.tool_ok += result["ok"]
                 seen[key] = result
                 entry["events"].append({"call": call, "result": result, "repeat": False})

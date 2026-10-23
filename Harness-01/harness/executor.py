@@ -37,23 +37,30 @@ def run_with_timeout(fn, args, timeout: float):
 
 
 def execute(call: dict, *, allowed: set[str] = frozenset({"read"}), logger=None,
-            run_id: str | None = None) -> dict:
-    """Execute one tool call proposed by the model. Never raises."""
+            run_id: str | None = None, allowed_tools: set[str] | None = None) -> dict:
+    """Execute one tool call proposed by the model. Never raises.
+
+    `allowed_tools` limits which registered tools may run in this step: offering a subset
+    to the model does not stop it from naming another tool, so the harness enforces it here.
+    """
     t0 = time.perf_counter()
     fn = call.get("function", {})
     name = fn.get("name", "")
     raw = fn.get("arguments", {})
-    out = _execute(name, raw, allowed)
+    out = _execute(name, raw, allowed, allowed_tools)
     if logger is not None:
         logger.tool_call(run_id=run_id, name=name, arguments=raw, ok=out["ok"],
                          error=out.get("error"), duration_s=time.perf_counter() - t0)
     return out
 
 
-def _execute(name: str, raw: Any, allowed: set[str]) -> dict:
+def _execute(name: str, raw: Any, allowed: set[str], allowed_tools: set[str] | None) -> dict:
     # 1 look up
     if name not in TOOLS:
         return err(f"Unknown tool {name!r}. Valid tools: {sorted(TOOLS)}")
+    if allowed_tools is not None and name not in allowed_tools:
+        return err(f"Tool {name} is not available in this step. "
+                   f"Available: {sorted(allowed_tools)}")
     spec = TOOLS[name]
     # 2 validate arguments (arguments may arrive as a JSON string)
     if isinstance(raw, str):
