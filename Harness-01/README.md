@@ -16,7 +16,7 @@ ollama pull deepseek-r1:1.5b           # profile fast
 ollama pull qwen3:4b                   # profiles reasoning and fallback
 
 python scripts/check_setup.py          # checks Ollama, models, prompts, one test call
-python -m unittest discover -s tests   # 27 offline tests, no Ollama needed
+python -m unittest discover -s tests   # 37 offline tests, no Ollama needed
 ```
 
 Requires Python 3.10+ and a running Ollama.
@@ -37,7 +37,7 @@ Model tags must match `ollama list` exactly. Before Session 3 every profile used
 
 | Path | Module | Slide |
 |---|---|---|
-| `harness/llm_client.py` | **M1** Runtime connector: native `/api/chat` or OpenAI-compatible `/v1` | M1 |
+| `harness/llm_client.py` | **M1** Runtime connector: native `/api/chat` or OpenAI-compatible `/v1`; moves leaked reasoning to `ChatResult.thinking` | M1 |
 | `config.yaml`, `harness/config.py` | **M2** Model config: profiles `fast`, `reasoning`, `fallback` | M2 |
 | `prompts/*.txt`, `harness/prompts.py` | **M3** Prompt manager: versioned templates `name@vN.txt`, ordered from stable to variable | M3 |
 | `harness/schemas.py` | **M4** Structured output: `Ticket` Pydantic model → JSON schema in `format` | M4 |
@@ -55,7 +55,9 @@ Model tags must match `ollama list` exactly. Before Session 3 every profile used
 | `scripts/` | Demos, hands-on and homework runners (below) | — |
 | `tests/test_offline.py` | 15 offline tests using a fake client | — |
 | `tests/test_agent_offline.py` | 12 offline agent-loop tests | Session 3 |
+| `tests/test_llm_client_offline.py` | 10 offline connector tests (reasoning split, loop through M1) | Session 3 |
 | `DEV_AGENT_LOOP.md` | Developer brief for the Session 3 hands-on | Session 3 |
+| `DEV_FIXES_01.md` | Follow-up brief: fixes after review | Session 3 |
 | `CONFIG_CHANGE.md` | Model-profile change for Session 3: what changed and its impact | Session 3 |
 
 ## Live demos (teacher)
@@ -127,6 +129,10 @@ Session 2 round trip (model → tool → model) in a controlled loop and returns
 Other properties:
 
 - Messages are **append-only**, so the prompt prefix can be reused by Ollama's cache.
+- Reasoning never enters the history: M1 (`split_thinking()` in `llm_client.py`) moves text
+  before `</think>` in the content, and Ollama's own `thinking` field, to `ChatResult.thinking`.
+  The completion check and the next step only see the answer. Each `llm_call` log line records
+  `thinking_chars`, so a model that still reasons stays visible in the log.
 - Runtime errors never reach the caller: status `error` plus a `safe_failure` log line.
 - `completion_check()` never looks at expected answers; grading lives only in `agent_eval.py`.
 
@@ -140,10 +146,16 @@ python scripts/prefix_check.py                       # stable vs shuffled prefix
 python scripts/prefix_check.py --task m02 --repeats 3
 ```
 
-A task succeeds when the loop ends `done`, **every expected tool was executed**, and the final
-answer contains an expected value (commas and spaces ignored). Text before `</think>` is
-removed before grading, because `qwen3:4b` sometimes leaks its reasoning into the answer.
-Task `m10` (days left in the month) is graded against today's date in Asia/Bangkok.
+The summary reports two numbers per profile:
+
+- **answer accuracy**: the final answer contains one of `expect_any` and all of `expect_all`
+  (commas, spaces and case ignored);
+- **full success**: answer accuracy **and** status `done` **and** every expected tool was executed.
+
+The gap between them is "right answer, but skipped a tool" (e.g. did the arithmetic itself instead
+of calling `calculator`). The per-task CSV has `answer_match`, `tool_adherence` and `success`
+(= full success). Task `m10` (days left in the month) is graded against today's date in
+Asia/Bangkok.
 
 `--verbose` prints every step: token counts, TTFT, `done_reason` (`[TRUNCATED]` when the call hit
 `num_predict`), each tool call with its result, `REPEAT` calls, completion-check verdicts and the
@@ -187,13 +199,15 @@ loop.groupby(["model", "variant", "step"])["in_tokens"].mean()
 ```
 
 Events: `llm_call`, `tool_call`, `safe_failure`. Group rows from one task with `run_id`.
-Agent-loop `llm_call` lines also carry `step`, `variant` and `done_reason`. Compare results by
+Every `llm_call` line has `thinking_chars`; agent-loop lines also carry `step`, `variant` and
+`done_reason`. Compare results by
 `model`, not by `profile`: the profile names point at different models in Session 2 and 3.
 
 ## Notes
 
-- `think: false` turns off Qwen3 reasoning for faster, cleaner output. Even so, `qwen3:4b`
-  sometimes writes its reasoning into the answer, ending with `</think>`.
+- `think: false` is meant to turn off Qwen3 reasoning. `qwen3:4b` still reasons and writes it
+  into the content, ending with `</think>`. M1 strips it (see `thinking_chars` in the log), but the
+  model still spends the time and output tokens on it.
 - `fallback` has `think: true`: thinking tokens count toward `num_predict`, and even a trivial
   question takes close to a minute.
 - Ollama durations are in nanoseconds. The client converts them to seconds.
