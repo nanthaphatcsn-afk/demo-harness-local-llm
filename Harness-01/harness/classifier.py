@@ -67,9 +67,12 @@ class _Label(BaseModel):
     category: Literal[CATEGORIES]  # type: ignore[valid-type]
 
 
-def classify(h, task: str, *, run_id: str | None = None,
-             profile: str = "fast") -> tuple[str, str]:
-    """Return (category, source). source = rules / llm / default."""
+def classify(h, task: str, *, run_id: str | None = None, profile: str = "fast",
+             calls: list | None = None) -> tuple[str, str]:
+    """Return (category, source). source = rules / llm / default.
+
+    `calls` collects the ChatResult of the model call, if one is made (for metrics).
+    """
     cat = classify_rules(task)
     if cat is not None:
         return cat, "rules"
@@ -80,6 +83,8 @@ def classify(h, task: str, *, run_id: str | None = None,
     try:
         r = h.llm(profile, msgs, schema=_Label.model_json_schema(), run_id=run_id,
                   log_extra={"state": "CLASSIFY"})
+        if calls is not None:
+            calls.append(r)
         return _Label.model_validate_json(r.content).category, "llm"
     except (LLMError, ValidationError, json.JSONDecodeError):
         return "general", "default"
