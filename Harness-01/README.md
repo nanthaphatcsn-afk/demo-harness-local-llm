@@ -16,7 +16,7 @@ ollama pull deepseek-r1:1.5b           # profile fast
 ollama pull qwen3:4b                   # profiles reasoning and fallback
 
 python scripts/check_setup.py          # checks Ollama, models, prompts, one test call
-python -m unittest discover -s tests   # 37 offline tests, no Ollama needed
+python -m unittest discover -s tests   # 58 offline tests, no Ollama needed
 ```
 
 Requires Python 3.10+ and a running Ollama.
@@ -61,6 +61,7 @@ Model tags must match `ollama list` exactly. Before Session 3 every profile used
 | `harness/state_machine.py` | **M9** State machine: states, transition table, `run_state_machine()` | Session 3 (2) |
 | `harness/classifier.py`, `harness/planner.py`, `harness/verifier.py`, `harness/router.py` | CLASSIFY (rules), PLAN (schema), VERIFY (code checks V1–V5), router | Session 3 (2) |
 | `scripts/sm_eval.py`, `scripts/compare_configs.py`, `scripts/_grading.py` | State-machine eval, loop vs state-machine comparison, shared grading | Session 3 (2) |
+| `tests/test_state_machine_offline.py` | 21 offline tests: transitions, classifier, verifier, runner | Session 3 (2) |
 | `DEV_STATE_MACHINE.md` | Developer brief for the state machine + router hands-on | Session 3 (2) |
 | `CONFIG_CHANGE.md` | Model-profile change for Session 3: what changed and its impact | Session 3 |
 
