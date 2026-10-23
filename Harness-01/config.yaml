@@ -1,0 +1,37 @@
+# M2 - Model config
+# Code asks for a profile, never a model tag. Change models here.
+# Pick profiles from your Session 1 benchmark results.
+# This environment uses one local model (deepseek-r1:1.5b) for every profile.
+
+runtime:
+  base_url: http://localhost:11434
+  api: native            # native = Ollama /api/chat ; openai = /v1/chat/completions
+  timeout_s: 300
+
+profiles:
+  fast:
+    model: deepseek-r1:1.5b
+    temperature: 0
+    num_ctx: 8192
+    num_predict: 512
+    keep_alive: 10m
+    think: false         # reasoning off: faster, cleaner JSON
+
+  reasoning:
+    model: deepseek-r1:1.5b
+    temperature: 0
+    num_ctx: 16384
+    num_predict: 1024
+    keep_alive: 10m
+    think: false
+
+  fallback:
+    model: deepseek-r1:1.5b
+    temperature: 0
+    num_ctx: 8192
+    num_predict: 512
+    keep_alive: 10m
+    think: false
+
+logging:
+  file: logs/calls.jsonl
