@@ -3,7 +3,7 @@
 A task counts as a full success when
   1. the loop ends with status "done",
   2. every expected tool was executed (tool adherence), and
-  3. the final answer contains one of expect_any
+  3. the final answer contains one of expect_any and all of expect_all
      (commas/spaces removed, case-insensitive) (answer match).
 The summary reports answer accuracy (3 only) next to full success (1 + 2 + 3), so
 "wrong answer" and "right answer, skipped a tool" can be told apart.
@@ -53,8 +53,9 @@ def grade(it: dict, res) -> tuple[bool, list[str], bool]:
     executed = {ev["call"]["function"].get("name") for t in res.trace for ev in t["events"]
                 if not ev["repeat"]}
     missing = [t for t in it["expected_tools"] if t not in executed]
-    answer = final_text(res.answer or "")
-    matched = bool(answer.strip()) and any(_norm(x) in _norm(answer) for x in expect)
+    answer = _norm(final_text(res.answer or ""))
+    matched = (bool(answer) and any(_norm(x) in answer for x in expect)
+               and all(_norm(x) in answer for x in it.get("expect_all", [])))
     return res.status == "done" and not missing and matched, missing, matched
 
 
